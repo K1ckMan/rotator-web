@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arduino Web UI</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+    }
+    .tabs {
+        display: flex;
+        background: #111;
+    }
+    .tabs button {
+        flex: 1;
+        padding: 14px;
+        background: #111;
+        color: #fff;
+        border: none;
+        font-size: 18px;
+    }
+    .tabs button.active {
+        background: #333;
+    }
+    .tab-content {
+        display: none;
+        padding: 20px;
+        background: #000;
+        min-height: 80vh;
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .btn {
+        display: block;
+        width: 100%;
+        margin: 15px 0;
+        padding: 24px;
+        font-size: 26px;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        background: #444;
+        color: #fff;
+    }
+    .btn:active {
+        background: #666;
+    }
+    .row {
+        display: flex;
+        gap: 12px;
+        margin: 20px 0;
+    }
+    .row .btn {
+        flex: 1;
+        font-size: 28px;
+        padding: 30px;
+    }
+    .slider-container {
+        margin: 20px 0;
+        text-align: center;
+    }
+    .slider-container label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 20px;
+    }
+    input[type="range"] {
+        width: 100%;
+    }
+    .status {
+        margin-top: 20px;
+        font-size: 22px;
+        font-weight: bold;
+        text-align: center;
+    }
+    input[type="file"], input[type="text"], textarea {
+        width: 100%;
+        margin: 12px 0;
+        padding: 14px;
+        font-size: 18px;
+        background: #222;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 6px;
+        box-sizing: border-box;
+    }
+    .log {
+        background: #111;
+        padding: 10px;
+        border: 1px solid #444;
+        height: 200px;
+        overflow-y: auto;
+        font-size: 14px;
+    }
+    .connected-devices {
+        background: #111;
+        border: 1px solid #444;
+        padding: 10px;
+        margin-top: 20px;
+        font-size: 16px;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+    <button class="tablink active" onclick="openTab(event, 'remote')">Remote Control</button>
+    <button class="tablink" onclick="openTab(event, 'firmware')">Firmware Upgrade</button>
+    <button class="tablink" onclick="openTab(event, 'debug')">Debug & Monitoring</button>
+    <button class="tablink" onclick="openTab(event, 'connect')">Connect Device</button>
+</div>
+
+<!-- Remote Control -->
+<div id="remote" class="tab-content active">
+    <div class="row">
+        <button class="btn" onclick="logEvent('Left pressed')">Left</button>
+        <button class="btn" onclick="logEvent('Right pressed')">Right</button>
+    </div>
+
+    <div class="slider-container">
+        <label for="speed">Speed: <span id="speedValue">50%</span></label>
+        <input type="range" id="speed" min="0" max="100" value="50" oninput="updateSpeed(this.value)">
+    </div>
+
+    <button class="btn" onclick="toggleHold()">Hold</button>
+    <button class="btn" onclick="toggleScan()">Scan</button>
+
+    <div class="status" id="statusText">
+        Hold: OFF | Scan: OFF
+    </div>
+</div>
+
+<!-- Firmware Upgrade -->
+<div id="firmware" class="tab-content">
+    <div>Current Firmware Version: <b>1.2.3.4</b></div>
+    <div>New Firmware Version: <b>1.2.3.4.5</b></div>
+    <input type="file">
+    <button class="btn">Upgrade from Internet</button>
+</div>
+
+<!-- Debug and Monitoring -->
+<div id="debug" class="tab-content">
+    <div>CPU Temperature: <b>10°C</b></div>
+    <div>Device Temperature: <b>20°C</b></div>
+    <div>RAM: <b>2MB / 4MB</b></div>
+
+    <h3>Events Log</h3>
+    <div class="log" id="eventLog">
+        <!-- Лог событий -->
+    </div>
+</div>
+
+<!-- Connect Device -->
+<div id="connect" class="tab-content">
+    <button class="btn">Scan Device</button>
+    <textarea placeholder="Found Devices (MAC addresses)..."></textarea>
+    <input type="text" placeholder="Enter MAC Address">
+    <button class="btn" onclick="connectDevice()">Connect</button>
+
+    <h3>Connected Devices</h3>
+    <div class="connected-devices" id="connectedDevices">
+        Ring 00:00:00:00:00<br>
+        Remote control 11:22:33:44:55
+    </div>
+</div>
+
+<script>
+let holdState = false;
+let scanState = false;
+let connectedList = ["Ring 00:00:00:00:00", "Remote control 11:22:33:44:55"];
+
+function openTab(evt, tabId) {
+    let i, tabcontent, tablinks;
+    tabcontent = document.getElementsByClassName("tab-content");
+    for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].classList.remove("active");
+    }
+    tablinks = document.getElementsByClassName("tablink");
+    for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].classList.remove("active");
+    }
+    document.getElementById(tabId).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
+function toggleHold() {
+    holdState = !holdState;
+    updateStatus();
+    logEvent("Hold: " + (holdState ? "ON" : "OFF"));
+}
+
+function toggleScan() {
+    scanState = !scanState;
+    updateStatus();
+    logEvent("Scan: " + (scanState ? "ON" : "OFF"));
+}
+
+function updateStatus() {
+    document.getElementById("statusText").innerText = 
+        "Hold: " + (holdState ? "ON" : "OFF") + " | Scan: " + (scanState ? "ON" : "OFF");
+}
+
+function updateSpeed(value) {
+    document.getElementById("speedValue").innerText = value + "%";
+    logEvent("Speed set to " + value + "%");
+}
+
+function logEvent(text) {
+    let logBox = document.getElementById("eventLog");
+    let timestamp = new Date().toLocaleTimeString();
+    logBox.innerHTML = `<div>[${timestamp}] ${text}</div>` + logBox.innerHTML;
+}
+
+function connectDevice() {
+    let input = document.querySelector('#connect input[type="text"]');
+    let value = input.value.trim();
+    if (value) {
+        connectedList.push(value);
+        updateConnectedDevices();
+        logEvent("Connected device: " + value);
+        input.value = '';
+    }
+}
+
+function updateConnectedDevices() {
+    document.getElementById("connectedDevices").innerHTML = connectedList.join('<br>');
+}
+</script>
+
+</body>
+</html>
